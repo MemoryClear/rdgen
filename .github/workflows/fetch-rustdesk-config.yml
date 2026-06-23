@@ -1,0 +1,180 @@
+# 从 RustDesk 官方仓库获取构建配置的可复用工作流
+name: Fetch RustDesk Build Config
+
+on:
+  workflow_call:
+    inputs:
+      rustdesk-version:
+        description: 'RustDesk version (e.g., 1.4.7, master)'
+        required: true
+        type: string
+      platform:
+        description: 'Target platform (windows, android, linux, macos)'
+        required: true
+        type: string
+    outputs:
+      NDK_VERSION:
+        description: 'Android NDK version'
+        value: ${{ jobs.fetch-config.outputs.NDK_VERSION }}
+      RUST_VERSION:
+        description: 'Rust version'
+        value: ${{ jobs.fetch-config.outputs.RUST_VERSION }}
+      SCITER_RUST_VERSION:
+        description: 'Sciter Rust version'
+        value: ${{ jobs.fetch-config.outputs.SCITER_RUST_VERSION }}
+      MAC_RUST_VERSION:
+        description: 'macOS Rust version'
+        value: ${{ jobs.fetch-config.outputs.MAC_RUST_VERSION }}
+      FLUTTER_VERSION:
+        description: 'Flutter version'
+        value: ${{ jobs.fetch-config.outputs.FLUTTER_VERSION }}
+      ANDROID_FLUTTER_VERSION:
+        description: 'Android Flutter version'
+        value: ${{ jobs.fetch-config.outputs.ANDROID_FLUTTER_VERSION }}
+      BRIDGE_FLUTTER_VERSION:
+        description: 'Bridge Flutter version'
+        value: ${{ jobs.fetch-config.outputs.BRIDGE_FLUTTER_VERSION }}
+      VCPKG_COMMIT_ID:
+        description: 'VCPKG commit ID'
+        value: ${{ jobs.fetch-config.outputs.VCPKG_COMMIT_ID }}
+      ARMV7_VCPKG_COMMIT_ID:
+        description: 'ARMv7 VCPKG commit ID'
+        value: ${{ jobs.fetch-config.outputs.ARMV7_VCPKG_COMMIT_ID }}
+      LLVM_VERSION:
+        description: 'LLVM version'
+        value: ${{ jobs.fetch-config.outputs.LLVM_VERSION }}
+      CARGO_NDK_VERSION:
+        description: 'Cargo NDK version'
+        value: ${{ jobs.fetch-config.outputs.CARGO_NDK_VERSION }}
+      FLUTTER_RUST_BRIDGE_VERSION:
+        description: 'Flutter Rust Bridge version'
+        value: ${{ jobs.fetch-config.outputs.FLUTTER_RUST_BRIDGE_VERSION }}
+      CARGO_EXPAND_VERSION:
+        description: 'Cargo expand version'
+        value: ${{ jobs.fetch-config.outputs.CARGO_EXPAND_VERSION }}
+      SCITER_NASM_DEBVERSION:
+        description: 'Sciter NASM Debian version'
+        value: ${{ jobs.fetch-config.outputs.SCITER_NASM_DEBVERSION }}
+      SCITER_ARMV7_CMAKE_VERSION:
+        description: 'Sciter ARMv7 CMake version'
+        value: ${{ jobs.fetch-config.outputs.SCITER_ARMV7_CMAKE_VERSION }}
+
+jobs:
+  fetch-config:
+    name: Fetch RustDesk Build Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      NDK_VERSION: ${{ steps.parse-config.outputs.NDK_VERSION }}
+      RUST_VERSION: ${{ steps.parse-config.outputs.RUST_VERSION }}
+      SCITER_RUST_VERSION: ${{ steps.parse-config.outputs.SCITER_RUST_VERSION }}
+      MAC_RUST_VERSION: ${{ steps.parse-config.outputs.MAC_RUST_VERSION }}
+      FLUTTER_VERSION: ${{ steps.parse-config.outputs.FLUTTER_VERSION }}
+      ANDROID_FLUTTER_VERSION: ${{ steps.parse-config.outputs.ANDROID_FLUTTER_VERSION }}
+      BRIDGE_FLUTTER_VERSION: ${{ steps.parse-config.outputs.BRIDGE_FLUTTER_VERSION }}
+      VCPKG_COMMIT_ID: ${{ steps.parse-config.outputs.VCPKG_COMMIT_ID }}
+      ARMV7_VCPKG_COMMIT_ID: ${{ steps.parse-config.outputs.ARMV7_VCPKG_COMMIT_ID }}
+      LLVM_VERSION: ${{ steps.parse-config.outputs.LLVM_VERSION }}
+      CARGO_NDK_VERSION: ${{ steps.parse-config.outputs.CARGO_NDK_VERSION }}
+      FLUTTER_RUST_BRIDGE_VERSION: ${{ steps.parse-config.outputs.FLUTTER_RUST_BRIDGE_VERSION }}
+      CARGO_EXPAND_VERSION: ${{ steps.parse-config.outputs.CARGO_EXPAND_VERSION }}
+      SCITER_NASM_DEBVERSION: ${{ steps.parse-config.outputs.SCITER_NASM_DEBVERSION }}
+      SCITER_ARMV7_CMAKE_VERSION: ${{ steps.parse-config.outputs.SCITER_ARMV7_CMAKE_VERSION }}
+
+    steps:
+      - name: Checkout rdgen repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Fetch build configuration from RustDesk
+        id: fetch-config
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .github/scripts/fetch_build_config.py \
+            --version "${{ inputs.rustdesk-version }}" \
+            --platform "${{ inputs.platform }}" \
+            --output json \
+            > config.json
+
+          echo "Fetched configuration:"
+          cat config.json
+
+      - name: Parse configuration and set outputs
+        id: parse-config
+        run: |
+          # 读取 JSON 并设置输出
+          CONFIG=$(cat config.json)
+
+          # 提取各个变量并设置为输出
+          NDK_VERSION=$(echo "$CONFIG" | jq -r '.NDK_VERSION // empty')
+          [ -n "$NDK_VERSION" ] && echo "NDK_VERSION=$NDK_VERSION" >> $GITHUB_OUTPUT || echo "NDK_VERSION=r28c" >> $GITHUB_OUTPUT
+
+          RUST_VERSION=$(echo "$CONFIG" | jq -r '.RUST_VERSION // empty')
+          [ -n "$RUST_VERSION" ] && echo "RUST_VERSION=$RUST_VERSION" >> $GITHUB_OUTPUT || echo "RUST_VERSION=1.75" >> $GITHUB_OUTPUT
+
+          SCITER_RUST_VERSION=$(echo "$CONFIG" | jq -r '.SCITER_RUST_VERSION // empty')
+          [ -n "$SCITER_RUST_VERSION" ] && echo "SCITER_RUST_VERSION=$SCITER_RUST_VERSION" >> $GITHUB_OUTPUT || echo "SCITER_RUST_VERSION=1.75" >> $GITHUB_OUTPUT
+
+          MAC_RUST_VERSION=$(echo "$CONFIG" | jq -r '.MAC_RUST_VERSION // empty')
+          [ -n "$MAC_RUST_VERSION" ] && echo "MAC_RUST_VERSION=$MAC_RUST_VERSION" >> $GITHUB_OUTPUT || echo "MAC_RUST_VERSION=1.81" >> $GITHUB_OUTPUT
+
+          FLUTTER_VERSION=$(echo "$CONFIG" | jq -r '.FLUTTER_VERSION // empty')
+          [ -n "$FLUTTER_VERSION" ] && echo "FLUTTER_VERSION=$FLUTTER_VERSION" >> $GITHUB_OUTPUT || echo "FLUTTER_VERSION=3.24.5" >> $GITHUB_OUTPUT
+
+          ANDROID_FLUTTER_VERSION=$(echo "$CONFIG" | jq -r '.ANDROID_FLUTTER_VERSION // empty')
+          [ -n "$ANDROID_FLUTTER_VERSION" ] && echo "ANDROID_FLUTTER_VERSION=$ANDROID_FLUTTER_VERSION" >> $GITHUB_OUTPUT || echo "ANDROID_FLUTTER_VERSION=3.24.5" >> $GITHUB_OUTPUT
+
+          BRIDGE_FLUTTER_VERSION=$(echo "$CONFIG" | jq -r '.BRIDGE_FLUTTER_VERSION // empty')
+          [ -n "$BRIDGE_FLUTTER_VERSION" ] && echo "BRIDGE_FLUTTER_VERSION=$BRIDGE_FLUTTER_VERSION" >> $GITHUB_OUTPUT || echo "BRIDGE_FLUTTER_VERSION=3.22.3" >> $GITHUB_OUTPUT
+
+          VCPKG_COMMIT_ID=$(echo "$CONFIG" | jq -r '.VCPKG_COMMIT_ID // empty')
+          [ -n "$VCPKG_COMMIT_ID" ] && echo "VCPKG_COMMIT_ID=$VCPKG_COMMIT_ID" >> $GITHUB_OUTPUT || echo "VCPKG_COMMIT_ID=120deac3062162151622ca4860575a33844ba10b" >> $GITHUB_OUTPUT
+
+          ARMV7_VCPKG_COMMIT_ID=$(echo "$CONFIG" | jq -r '.ARMV7_VCPKG_COMMIT_ID // empty')
+          [ -n "$ARMV7_VCPKG_COMMIT_ID" ] && echo "ARMV7_VCPKG_COMMIT_ID=$ARMV7_VCPKG_COMMIT_ID" >> $GITHUB_OUTPUT || echo "ARMV7_VCPKG_COMMIT_ID=6f29f12e82a8293156836ad81cc9bf5af41fe836" >> $GITHUB_OUTPUT
+
+          LLVM_VERSION=$(echo "$CONFIG" | jq -r '.LLVM_VERSION // empty')
+          [ -n "$LLVM_VERSION" ] && echo "LLVM_VERSION=$LLVM_VERSION" >> $GITHUB_OUTPUT || echo "LLVM_VERSION=15.0.6" >> $GITHUB_OUTPUT
+
+          CARGO_NDK_VERSION=$(echo "$CONFIG" | jq -r '.CARGO_NDK_VERSION // empty')
+          [ -n "$CARGO_NDK_VERSION" ] && echo "CARGO_NDK_VERSION=$CARGO_NDK_VERSION" >> $GITHUB_OUTPUT || echo "CARGO_NDK_VERSION=3.1.2" >> $GITHUB_OUTPUT
+
+          FLUTTER_RUST_BRIDGE_VERSION=$(echo "$CONFIG" | jq -r '.FLUTTER_RUST_BRIDGE_VERSION // empty')
+          [ -n "$FLUTTER_RUST_BRIDGE_VERSION" ] && echo "FLUTTER_RUST_BRIDGE_VERSION=$FLUTTER_RUST_BRIDGE_VERSION" >> $GITHUB_OUTPUT || echo "FLUTTER_RUST_BRIDGE_VERSION=1.80.1" >> $GITHUB_OUTPUT
+
+          CARGO_EXPAND_VERSION=$(echo "$CONFIG" | jq -r '.CARGO_EXPAND_VERSION // empty')
+          [ -n "$CARGO_EXPAND_VERSION" ] && echo "CARGO_EXPAND_VERSION=$CARGO_EXPAND_VERSION" >> $GITHUB_OUTPUT || echo "CARGO_EXPAND_VERSION=1.0.95" >> $GITHUB_OUTPUT
+
+          SCITER_NASM_DEBVERSION=$(echo "$CONFIG" | jq -r '.SCITER_NASM_DEBVERSION // empty')
+          [ -n "$SCITER_NASM_DEBVERSION" ] && echo "SCITER_NASM_DEBVERSION=$SCITER_NASM_DEBVERSION" >> $GITHUB_OUTPUT || echo "SCITER_NASM_DEBVERSION=2.15.05-1" >> $GITHUB_OUTPUT
+
+          SCITER_ARMV7_CMAKE_VERSION=$(echo "$CONFIG" | jq -r '.SCITER_ARMV7_CMAKE_VERSION // empty')
+          [ -n "$SCITER_ARMV7_CMAKE_VERSION" ] && echo "SCITER_ARMV7_CMAKE_VERSION=$SCITER_ARMV7_CMAKE_VERSION" >> $GITHUB_OUTPUT || echo "SCITER_ARMV7_CMAKE_VERSION=3.29.7" >> $GITHUB_OUTPUT
+
+      - name: Display configuration
+        run: |
+          echo "=== RustDesk Build Configuration for ${{ inputs.rustdesk-version }} ==="
+          echo "Platform: ${{ inputs.platform }}"
+          echo ""
+          echo "Toolchain versions:"
+          echo "  NDK_VERSION: ${{ steps.parse-config.outputs.NDK_VERSION }}"
+          echo "  RUST_VERSION: ${{ steps.parse-config.outputs.RUST_VERSION }}"
+          echo "  SCITER_RUST_VERSION: ${{ steps.parse-config.outputs.SCITER_RUST_VERSION }}"
+          echo "  MAC_RUST_VERSION: ${{ steps.parse-config.outputs.MAC_RUST_VERSION }}"
+          echo "  LLVM_VERSION: ${{ steps.parse-config.outputs.LLVM_VERSION }}"
+          echo ""
+          echo "Flutter versions:"
+          echo "  FLUTTER_VERSION: ${{ steps.parse-config.outputs.FLUTTER_VERSION }}"
+          echo "  ANDROID_FLUTTER_VERSION: ${{ steps.parse-config.outputs.ANDROID_FLUTTER_VERSION }}"
+          echo "  BRIDGE_FLUTTER_VERSION: ${{ steps.parse-config.outputs.BRIDGE_FLUTTER_VERSION }}"
+          echo ""
+          echo "Dependencies:"
+          echo "  VCPKG_COMMIT_ID: ${{ steps.parse-config.outputs.VCPKG_COMMIT_ID }}"
+          echo "  ARMV7_VCPKG_COMMIT_ID: ${{ steps.parse-config.outputs.ARMV7_VCPKG_COMMIT_ID }}"

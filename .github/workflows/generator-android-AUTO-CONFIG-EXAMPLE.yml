@@ -1,0 +1,128 @@
+# generator-android.yml 修改示例
+# 展示如何使用自动获取的 RustDesk 官方配置
+
+name: Custom Android Client Generator (Auto Config)
+run-name: Custom Android Client Generator
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'version to buld'
+        required: true
+        default: ''
+        type: string
+      zip_url:
+        description: 'url to zip of json'
+        required: true
+        default: ''
+        type: string
+
+# 注意：env 部分移除硬编码的版本号
+# 版本将从 RustDesk 官方配置自动获取
+env:
+  TAG_NAME: "${{ inputs.upload-tag }}"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  VERSION: "${{ inputs.version }}"
+  #signing keys env variable checks
+  ANDROID_SIGNING_KEY: "${{ secrets.ANDROID_SIGNING_KEY }}"
+  MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
+  UPLOAD_ARTIFACT: 'true'
+  SIGN_BASE_URL: "${{ secrets.SIGN_BASE_URL }}"
+  STATUS_URL: "${{ secrets.GENURL }}/updategh"
+
+jobs:
+  # 第一步：获取 RustDesk 官方配置
+  fetch-rustdesk-config:
+    name: Fetch RustDesk Config
+    uses: ./.github/workflows/fetch-rustdesk-config.yml
+    with:
+      rustdesk-version: ${{ inputs.version }}
+      platform: android
+
+  setup:
+    needs: [fetch-rustdesk-config]
+    uses: ./.github/workflows/fetch-encrypted-secrets.yml
+    with:
+      zip_url_json: ${{ inputs.zip_url }}
+
+  generate-bridge-linux:
+    needs: [fetch-rustdesk-config]
+    uses: ./.github/workflows/bridge.yml
+    with:
+      version: ${{ inputs.version }}
+    # 注意：bridge.yml 也需要修改以使用动态配置
+    # 这里可以传递配置作为参数，或者让 bridge.yml 自己获取
+
+  build-rustdesk-android:
+    needs: [generate-bridge-linux, setup, fetch-rustdesk-config]
+    name: build rustdesk android apk ${{ matrix.job.target }}
+    runs-on: ${{ matrix.job.os }}
+
+    # 使用从官方获取的配置作为环境变量
+    env:
+      SCITER_RUST_VERSION: ${{ needs.fetch-rustdesk-config.outputs.SCITER_RUST_VERSION }}
+      RUST_VERSION: ${{ needs.fetch-rustdesk-config.outputs.RUST_VERSION }}
+      CARGO_NDK_VERSION: ${{ needs.fetch-rustdesk-config.outputs.CARGO_NDK_VERSION }}
+      SCITER_ARMV7_CMAKE_VERSION: ${{ needs.fetch-rustdesk-config.outputs.SCITER_ARMV7_CMAKE_VERSION }}
+      SCITER_NASM_DEBVERSION: ${{ needs.fetch-rustdesk-config.outputs.SCITER_NASM_DEBVERSION }}
+      LLVM_VERSION: ${{ needs.fetch-rustdesk-config.outputs.LLVM_VERSION }}
+      FLUTTER_VERSION: ${{ needs.fetch-rustdesk-config.outputs.FLUTTER_VERSION }}
+      ANDROID_FLUTTER_VERSION: ${{ needs.fetch-rustdesk-config.outputs.ANDROID_FLUTTER_VERSION }}
+      FLUTTER_ELINUX_VERSION: "3.16.9"  # 这个版本通常不变
+      VCPKG_COMMIT_ID: ${{ needs.fetch-rustdesk-config.outputs.VCPKG_COMMIT_ID }}
+      ARMV7_VCPKG_COMMIT_ID: ${{ needs.fetch-rustdesk-config.outputs.ARMV7_VCPKG_COMMIT_ID }}
+      NDK_VERSION: ${{ needs.fetch-rustdesk-config.outputs.NDK_VERSION }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - {
+              arch: aarch64,
+              target: aarch64-linux-android,
+              os: ubuntu-24.04,
+              reltype: release,
+              suffix: "",
+            }
+          - {
+              arch: armv7,
+              target: armv7-linux-androideabi,
+              os: ubuntu-24.04,
+              reltype: release,
+              suffix: "",
+            }
+          - {
+              arch: x86_64,
+              target: x86_64-linux-android,
+              os: ubuntu-24.04,
+              reltype: release,
+              suffix: "",
+            }
+
+    steps:
+      - name: Display build configuration
+        run: |
+          echo "=== Build Configuration for RustDesk ${{ inputs.version }} ==="
+          echo "NDK_VERSION: ${{ env.NDK_VERSION }}"
+          echo "RUST_VERSION: ${{ env.RUST_VERSION }}"
+          echo "FLUTTER_VERSION: ${{ env.FLUTTER_VERSION }}"
+          echo "VCPKG_COMMIT_ID: ${{ env.VCPKG_COMMIT_ID }}"
+          echo "================================================"
+
+      # ... 后续步骤保持不变 ...
+
+
+# ============================================
+# 修改说明：
+#
+# 1. 移除 env 部分的硬编码版本号
+# 2. 添加 fetch-rustdesk-config job 来获取配置
+# 3. 在 build job 中使用 needs.fetch-rustdesk-config.outputs.* 引用配置
+# 4. 添加配置显示步骤以便调试
+#
+# 优点：
+# - 自动跟随 RustDesk 官方版本更新
+# - 不同 RustDesk 版本使用正确的工具链
+# - 减少手动维护工作
+# - 构建日志清晰显示使用的配置
+# ============================================

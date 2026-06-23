@@ -1,12 +1,41 @@
 from django import forms
 from PIL import Image
+from .rustdesk_config import get_rustdesk_versions
+
+
+def get_version_choices():
+    """
+    动态获取 RustDesk 版本选项
+    从 GitHub Releases 自动获取，失败时使用后备列表
+    """
+    try:
+        versions = get_rustdesk_versions(limit=50)
+        return versions
+    except Exception as e:
+        # 如果获取失败，返回后备版本列表
+        print(f"Warning: Failed to fetch RustDesk versions: {e}")
+        return [
+            ('master', 'nightly (master - development build)'),
+            ('1.4.7', '1.4.7'),
+            ('1.4.6', '1.4.6'),
+            ('1.4.5', '1.4.5'),
+            ('1.4.4', '1.4.4'),
+            ('1.4.3', '1.4.3'),
+            ('1.4.2', '1.4.2'),
+            ('1.4.1', '1.4.1'),
+            ('1.4.0', '1.4.0'),
+            ('1.3.9', '1.3.9'),
+        ]
 
 class GenerateForm(forms.Form):
     sh_secret_field = forms.CharField(required=False)
     #Platform
     platform = forms.ChoiceField(choices=[('windows','Windows 64Bit'),('windows-x86','Windows 32Bit'),('linux','Linux'),('android','Android'),('macos','macOS')], initial='windows')
-    version = forms.ChoiceField(choices=[('master','nightly'),('1.4.7','1.4.7'),('1.4.6','1.4.6'),('1.4.5','1.4.5'),('1.4.4','1.4.4'),('1.4.3','1.4.3'),('1.4.2','1.4.2'),('1.4.1','1.4.1'),('1.4.0','1.4.0'),('1.3.9','1.3.9'),('1.3.8','1.3.8'),('1.3.7','1.3.7'),('1.3.6','1.3.6'),('1.3.5','1.3.5'),('1.3.4','1.3.4'),('1.3.3','1.3.3')], initial='1.4.7')
-    help_text="'master' is the development version (nightly build) with the latest features but may be less stable"
+    version = forms.ChoiceField(
+        choices=get_version_choices,
+        initial='master',
+        help_text="Version is automatically fetched from RustDesk GitHub Releases. 'master' is the development version (nightly build) with the latest features but may be less stable."
+    )
     delayFix = forms.BooleanField(initial=True, required=False)
 
     #General
@@ -85,6 +114,14 @@ class GenerateForm(forms.Form):
     cycleMonitor = forms.BooleanField(initial=False, required=False)
     xOffline = forms.BooleanField(initial=False, required=False)
     removeNewVersionNotif = forms.BooleanField(initial=False, required=False)
+
+    def __init__(self, *args, **kwargs):
+        """
+        初始化表单，动态设置版本选项
+        """
+        super().__init__(*args, **kwargs)
+        # 动态更新版本选项
+        self.fields['version'].choices = get_version_choices()
 
     def clean_iconfile(self):
         print("checking icon")
