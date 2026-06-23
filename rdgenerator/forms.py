@@ -27,6 +27,7 @@ def get_version_choices():
             ('1.3.9', '1.3.9'),
         ]
 
+
 class GenerateForm(forms.Form):
     sh_secret_field = forms.CharField(required=False)
     #Platform
@@ -141,7 +142,7 @@ class GenerateForm(forms.Form):
                 # Check for square dimensions
                 if width != height:
                     raise forms.ValidationError("Custom App Icon dimensions must be square.")
-                
+
                 return image
             except OSError:  # Handle cases where the uploaded file is not a valid image
                 raise forms.ValidationError("Invalid icon file.")
