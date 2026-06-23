@@ -5,6 +5,8 @@ RustDesk 官方配置获取工具
 import requests
 import re
 import logging
+import os
+import yaml
 from typing import Dict, Optional, List, Tuple
 from datetime import datetime, timedelta
 from django.core.cache import cache
@@ -95,13 +97,59 @@ class RustDeskConfigFetcher:
             return cls.get_fallback_versions()
 
     @classmethod
+    def load_fallback_config_from_file(cls) -> Optional[Dict]:
+        """
+        从本地 YAML 文件加载兜底配置
+
+        Returns:
+            配置字典或 None
+        """
+        try:
+            # 配置文件路径
+            config_file = os.path.join(
+                os.path.dirname(__file__),
+                'fallback_config.yaml'
+            )
+
+            if not os.path.exists(config_file):
+                logger.warning(f"Fallback config file not found: {config_file}")
+                return None
+
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+
+            logger.info(f"Loaded fallback config from {config_file}")
+            return config
+
+        except Exception as e:
+            logger.error(f"Failed to load fallback config file: {e}")
+            return None
+
+    @classmethod
     def get_fallback_versions(cls) -> List[Tuple[str, str]]:
         """
         获取后备版本列表（当 GitHub API 不可用时）
+        优先从本地配置文件读取，失败则使用硬编码列表
 
         Returns:
-            版本列表
+            版本列表 [(version, display_name), ...]
         """
+        # 尝试从本地 YAML 文件读取
+        config = cls.load_fallback_config_from_file()
+        if config and 'versions' in config:
+            versions = []
+            for v in config['versions']:
+                version = v.get('version')
+                display = v.get('display', version)
+                if version:
+                    versions.append((version, display))
+
+            if versions:
+                logger.info(f"Using {len(versions)} versions from fallback config file")
+                return versions
+
+        # 如果配置文件不可用，使用硬编码列表
+        logger.warning("Using hardcoded fallback version list")
         return [
             ('master', 'nightly (master - development build)'),
             ('1.4.7', '1.4.7'),
@@ -113,6 +161,12 @@ class RustDeskConfigFetcher:
             ('1.4.1', '1.4.1'),
             ('1.4.0', '1.4.0'),
             ('1.3.9', '1.3.9'),
+            ('1.3.8', '1.3.8'),
+            ('1.3.7', '1.3.7'),
+            ('1.3.6', '1.3.6'),
+            ('1.3.5', '1.3.5'),
+            ('1.3.4', '1.3.4'),
+            ('1.3.3', '1.3.3'),
         ]
 
     @classmethod
@@ -277,10 +331,22 @@ class RustDeskConfigFetcher:
     def get_default_config(cls) -> Dict[str, str]:
         """
         获取默认配置（当无法获取官方配置时使用）
+        优先从本地配置文件读取，失败则使用硬编码默认值
 
         Returns:
             默认配置字典
         """
+        # 尝试从本地 YAML 文件读取
+        config = cls.load_fallback_config_from_file()
+        if config and 'build_configs' in config:
+            # 获取默认配置
+            default_config = config['build_configs'].get('default', {})
+            if default_config:
+                logger.info("Using default config from fallback config file")
+                return default_config
+
+        # 如果配置文件不可用，使用硬编码默认值
+        logger.warning("Using hardcoded default config")
         return {
             'SCITER_RUST_VERSION': '1.75',
             'RUST_VERSION': '1.75',
@@ -302,6 +368,29 @@ class RustDeskConfigFetcher:
         }
 
     @classmethod
+    def get_version_specific_fallback_config(cls, version: str) -> Optional[Dict[str, str]]:
+        """
+        获取特定版本的兜底配置（如果存在）
+
+        Args:
+            version: RustDesk 版本
+
+        Returns:
+            配置字典或 None
+        """
+        config = cls.load_fallback_config_from_file()
+        if not config:
+            return None
+
+        # 检查是否有版本特定配置
+        version_configs = config.get('build_configs', {}).get('version_specific', {})
+        if version in version_configs:
+            logger.info(f"Found version-specific fallback config for {version}")
+            return version_configs[version]
+
+        return None
+
+    @classmethod
     def get_platform_specific_config(cls, version: str, platform: str) -> Dict[str, str]:
         """
         获取平台特定的配置
@@ -313,8 +402,18 @@ class RustDeskConfigFetcher:
         Returns:
             平台特定配置字典
         """
-        # 获取基础配置
+        # 1. 尝试从官方获取配置
         base_config = cls.fetch_workflow_config(version)
+
+        # 2. 如果官方获取失败，尝试使用版本特定的兜底配置
+        if not base_config:
+            logger.warning(f"Failed to fetch official config for {version}, trying fallback")
+            base_config = cls.get_version_specific_fallback_config(version)
+
+            # 3. 如果版本特定配置也没有，使用默认配置
+            if not base_config:
+                logger.warning(f"No version-specific fallback for {version}, using default")
+                base_config = cls.get_default_config()
 
         # 平台特定的调整
         platform_config = {}

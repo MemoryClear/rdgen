@@ -7,13 +7,28 @@ def get_version_choices():
     """
     动态获取 RustDesk 版本选项
     从 GitHub Releases 自动获取，失败时使用后备列表
+    
+    Returns:
+        版本列表 [(version, display_name), ...]
     """
     try:
+        from .rustdesk_config import get_rustdesk_versions
         versions = get_rustdesk_versions(limit=50)
-        return versions
+        
+        # 验证返回的版本列表是否有效
+        if versions and len(versions) > 0:
+            return versions
+        else:
+            raise ValueError("Empty version list returned")
+            
     except Exception as e:
-        # 如果获取失败，返回后备版本列表
-        print(f"Warning: Failed to fetch RustDesk versions: {e}")
+        # 如果获取失败，使用后备版本列表
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to fetch RustDesk versions from GitHub: {e}")
+        logger.info("Using fallback version list")
+        
+        # 返回兜底版本列表
         return [
             ('master', 'nightly (master - development build)'),
             ('1.4.7', '1.4.7'),
@@ -25,6 +40,12 @@ def get_version_choices():
             ('1.4.1', '1.4.1'),
             ('1.4.0', '1.4.0'),
             ('1.3.9', '1.3.9'),
+            ('1.3.8', '1.3.8'),
+            ('1.3.7', '1.3.7'),
+            ('1.3.6', '1.3.6'),
+            ('1.3.5', '1.3.5'),
+            ('1.3.4', '1.3.4'),
+            ('1.3.3', '1.3.3'),
         ]
 
 
