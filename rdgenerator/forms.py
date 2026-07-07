@@ -53,11 +53,14 @@ class GenerateForm(forms.Form):
     sh_secret_field = forms.CharField(required=False)
     #Platform
     platform = forms.ChoiceField(choices=[('windows','Windows 64Bit'),('windows-x86','Windows 32Bit'),('linux','Linux'),('android','Android'),('macos','macOS')], initial='windows')
+
     version = forms.ChoiceField(
         choices=get_version_choices,
         initial='master',
-        help_text="Version is automatically fetched from RustDesk GitHub Releases. 'master' is the development version (nightly build) with the latest features but may be less stable."
+        
     )
+    help_text="Version is automatically fetched from RustDesk GitHub Releases. 'master' is the development version (nightly build) with the latest features but may be less stable."
+
     delayFix = forms.BooleanField(initial=True, required=False)
 
     #General
