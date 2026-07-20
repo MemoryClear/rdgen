@@ -43,4 +43,4 @@ jobs:
         if: env.CREATE_IMAGE == 'true'
         with:
           push: true
-          tags: ${{ vars.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }}
