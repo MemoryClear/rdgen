@@ -4,4 +4,4 @@ pillow
 gunicorn
 pyzipper
 pyyaml
-pymysql
+pymysql==1.1.1
