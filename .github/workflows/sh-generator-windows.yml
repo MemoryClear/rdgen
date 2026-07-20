@@ -208,14 +208,22 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          sed -i -e 's|Purslane Tech Pte. Ltd.|${{ env.compname }}|' ./flutter/lib/desktop/pages/desktop_setting_page.dart
+          sed -i -e 's|Purslane Tech Pte. Ltd.|${{ env.compname }}|' ./res/msi/preprocess.py
+          sed -i -e 's|r"Purslane(?: Tech Pte\\.)? Ltd"|"${{ env.compname }}"|' ./res/msi/preprocess.py
+          sed -i -e 's|Purslane Tech Pte. Ltd.|${{ env.compname }}|' ./flutter/windows/runner/Runner.rc
+          sed -i -e 's|Purslane Tech Pte. Ltd.|${{ env.compname }}|' ./Cargo.toml
+          sed -i -e 's|Purslane Tech Pte. Ltd.|${{ env.compname }}|' ./libs/portable/Cargo.toml
+          sed -i -e 's|Purslane Tech Pte. Ltd.|${{ env.compname }}|' ./res/msi/Package/License.rtf
+          sed -i -e 's|Purslane Tech Pte. Ltd.|${{ env.compname }}|' ./src/main.rs
           sed -i -e 's|Purslane Ltd|${{ env.compname }}|' ./flutter/lib/desktop/pages/desktop_setting_page.dart
           sed -i -e 's|PURSLANE|${{ env.compname }}|' ./res/msi/preprocess.py
           sed -i -e 's|Purslane Ltd|${{ env.compname }}|' ./res/msi/preprocess.py
-          sed -i -e 's|"Copyright © 2025 Purslane Ltd. All rights reserved."|"Copyright © 2025 ${{ env.compname }}. All rights reserved."|' ./flutter/windows/runner/Runner.rc
           sed -i -e 's|Purslane Ltd|${{ env.compname }}|' ./flutter/windows/runner/Runner.rc
           sed -i -e 's|Purslane Ltd|${{ env.compname }}|' ./Cargo.toml
           sed -i -e 's|Purslane Ltd|${{ env.compname }}|' ./libs/portable/Cargo.toml
           sed -i -e 's|Purslane Ltd|${{ env.compname }}|' ./res/msi/Package/License.rtf
+          sed -i -e 's|Purslane Ltd|${{ env.compname }}|' ./src/main.rs
              
       - name: change url to custom
         if: env.urlLink != 'https://rustdesk.com'
@@ -306,18 +314,6 @@ jobs:
         shell: bash
         run: |
           sed -i -e 's|!key.is_empty()|false|' ./src/client.rs
-
-      - name: add cycle monitors to toolbar
-        if: env.cycleMonitor == 'true'
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 1
-          max_attempts: 3
-          shell: pwsh
-          continue_on_error: true
-          command: |
-            Invoke-WebRequest -Uri https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/cycle_monitor.diff -OutFile cycle_monitor.diff
-            git apply cycle_monitor.diff
 
       - name: use X for offline display instead of orange circle
         if: env.xOffline == 'true'
