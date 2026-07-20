@@ -323,6 +323,13 @@ jobs:
             wget https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/xoffline.diff
             git apply xoffline.diff
 
+      - name: fix address book online status loss (Personal=1)
+        continue-on-error: true
+        shell: bash
+        run: |
+          wget -q https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/ab_online_fix.py -O ab_online_fix.py
+          python3 ab_online_fix.py
+
       - name: hide-cm
         if: env.hidecm == 'true'
         uses: nick-fields/retry@v3

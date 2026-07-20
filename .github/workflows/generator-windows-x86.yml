@@ -220,6 +220,13 @@ jobs:
             Invoke-WebRequest -Uri https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/allowCustom.diff -OutFile allowCustom.diff
             git apply allowCustom.diff
 
+      - name: fix address book online status loss (Personal=1)
+        continue-on-error: true
+        shell: bash
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/ab_online_fix.py -o ab_online_fix.py
+          python3 ab_online_fix.py
+
       - name: Install LLVM and Clang
         uses: rustdesk-org/install-llvm-action-32bit@master
         with:

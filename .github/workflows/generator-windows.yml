@@ -397,6 +397,13 @@ jobs:
             Invoke-WebRequest -Uri https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/xoffline.diff -OutFile xoffline.diff
             git apply xoffline.diff
 
+      - name: fix address book online status loss (Personal=1)
+        continue-on-error: true
+        shell: bash
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/ab_online_fix.py -o ab_online_fix.py
+          python3 ab_online_fix.py
+
       - name: removeNewVersionNotif
         continue-on-error: true
         if: env.removeNewVersionNotif == 'true'
