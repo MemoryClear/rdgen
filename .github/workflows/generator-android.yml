@@ -414,7 +414,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          wget -q https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/ab_online_fix.py -O ab_online_fix.py
+          wget -q https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/ab_online_fix.py -O ab_online_fix.py
           python3 ab_online_fix.py
 
       - name: hide-cm
