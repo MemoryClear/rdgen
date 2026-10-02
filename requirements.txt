@@ -5,3 +5,6 @@ gunicorn
 pyzipper
 pyyaml
 pymysql==1.1.1
+# PyMySQL needs this for caching_sha2_password, the auth plugin MySQL 8.4 uses
+# for every account it creates, whenever the connection is not over TLS.
+cryptography
