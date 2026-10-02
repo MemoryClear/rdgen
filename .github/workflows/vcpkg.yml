@@ -9,6 +9,8 @@ on:
         default: 'Manual dependency update'
 
 env:
+  # Fallback only. The real vcpkg commit is read from the RustDesk vcpkg.json
+  # cloned below, so it tracks whatever master currently pins.
   VCPKG_COMMIT_ID: '120deac3062162151622ca4860575a33844ba10b'
 
 jobs:
@@ -43,11 +45,26 @@ jobs:
           cp -r rustdesk_repo/res/vcpkg ./res/
         shell: bash
 
+      - name: Detect vcpkg baseline
+        id: vcpkg_baseline
+        shell: bash
+        run: |
+          # vcpkg.json was just cloned from RustDesk master above; use the commit
+          # it pins as the baseline, otherwise version resolution dies with
+          #   error: no version database entry for <port> at <version>
+          baseline=$(sed -n 's/.*baseline"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' vcpkg.json | head -n 1)
+          if [ -z "$baseline" ]; then
+            baseline="${{ env.VCPKG_COMMIT_ID }}"
+            echo "::warning::no baseline found in vcpkg.json, falling back to $baseline"
+          fi
+          echo "sha=$baseline" >> "$GITHUB_OUTPUT"
+          echo "RustDesk vcpkg baseline: $baseline"
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: ${{ github.workspace }}/vcpkg
-          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          vcpkgGitCommitId: ${{ steps.vcpkg_baseline.outputs.sha }}
           doNotCache: false
 
       - name: Install vcpkg dependencies

@@ -28,7 +28,9 @@ env:
   FLUTTER_ELINUX_VERSION: "3.16.9"
   TAG_NAME: "${{ inputs.upload-tag }}"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-  # vcpkg version: 2024.07.12
+  # Fallback only. The real vcpkg commit is read at build time from the checked
+  # out RustDesk vcpkg.json (vcpkg-configuration.default-registry.baseline), so
+  # it always matches the version being built. See "Detect vcpkg baseline".
   VCPKG_COMMIT_ID: "${{ inputs.version == 'master' && '9e593bb18ea69cc5095e012465dcd675a822ed0d' || '120deac3062162151622ca4860575a33844ba10b' }}"
   ARMV7_VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
   VERSION: "${{ inputs.version }}"
@@ -509,10 +511,29 @@ jobs:
           name: bridge-artifact
           path: ./
 
+      - name: Detect vcpkg baseline
+        id: vcpkg_baseline
+        shell: bash
+        run: |
+          # RustDesk pins the port registry baseline inside its vcpkg.json. The
+          # vcpkg tree must be checked out at (or after) that commit, otherwise
+          # version resolution dies with
+          #   error: no version database entry for <port> at <version>
+          # Tags pin different baselines, so a hardcoded commit cannot work for
+          # every version.
+          # Matches both "baseline" and "builtin-baseline" keys.
+          baseline=$(sed -n 's/.*baseline"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' vcpkg.json | head -n 1)
+          if [ -z "$baseline" ]; then
+            baseline="${{ env.VCPKG_COMMIT_ID }}"
+            echo "::warning::no baseline found in vcpkg.json, falling back to $baseline"
+          fi
+          echo "sha=$baseline" >> "$GITHUB_OUTPUT"
+          echo "RustDesk vcpkg baseline: $baseline"
+
       - name: Setup vcpkg with Github Actions binary cache
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          vcpkgGitCommitId: ${{ steps.vcpkg_baseline.outputs.sha }}
           doNotCache: false
 
       - name: Install vcpkg dependencies
