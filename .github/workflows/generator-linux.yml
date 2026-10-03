@@ -351,7 +351,7 @@ jobs:
       # rdgen: keep API login, but never feed access_token into the connection path.
       # Otherwise a logged-in client forces secure_tcp against hbbs, and a self-hosted
       # hbbs never answers -> "Failed to secure tcp: deadline has elapsed" on connect.
-      - name: tokenless (fix "Failed to secure tcp: deadline has elapsed")
+      - name: 'tokenless (fix "Failed to secure tcp: deadline has elapsed")'
         shell: bash
         run: |
           if [ -f ./.github/patches/tokenless.py ]; then
@@ -1091,7 +1091,7 @@ jobs:
       # rdgen: keep API login, but never feed access_token into the connection path.
       # Otherwise a logged-in client forces secure_tcp against hbbs, and a self-hosted
       # hbbs never answers -> "Failed to secure tcp: deadline has elapsed" on connect.
-      - name: tokenless (fix "Failed to secure tcp: deadline has elapsed")
+      - name: 'tokenless (fix "Failed to secure tcp: deadline has elapsed")'
         shell: bash
         run: |
           if [ -f ./.github/patches/tokenless.py ]; then
