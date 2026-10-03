@@ -255,7 +255,6 @@ jobs:
           sed -i -e 's|$downloadUrl/$downloadFile|${{ env.downloadLink }}|' ./flutter/lib/desktop/widgets/update_progress.dart
 
       - name: set server, serverPort, key, and apiserver
-        continue-on-error: true
         shell: bash
         env:
           SERVER_DOMAIN: ${{ env.server }}
@@ -302,8 +301,40 @@ jobs:
 
           echo "=== Verification ==="
           grep -nE "RENDEZVOUS_PORT|RELAY_PORT|WS_" ./libs/hbb_common/src/config.rs
+          # Hard checks: a silently unpatched server/key ships a client that points at
+          # the wrong server, so fail the build instead of shipping it.
+          for _v in SERVER_DOMAIN SERVER_PORT SERVER_KEY API_SERVER; do
+            eval "_val=\$$_v"
+            if [ -z "$_val" ]; then echo "::error::$_v is empty"; exit 1; fi
+          done
+          grep -qF "$SERVER_DOMAIN" ./libs/hbb_common/src/config.rs \
+            || { echo "::error::rendezvous server (config.rs RENDEZVOUS_SERVERS) not patched"; exit 1; }
+          grep -qF "pub const RENDEZVOUS_PORT: i32 = $SERVER_PORT;" ./libs/hbb_common/src/config.rs \
+            || { echo "::error::RENDEZVOUS_PORT not patched"; exit 1; }
+          grep -qF "$SERVER_KEY" ./libs/hbb_common/src/config.rs \
+            || { echo "::error::RS_PUB_KEY not patched"; exit 1; }
+          grep -qF "$API_SERVER" ./src/common.rs \
+            || { echo "::error::api server not patched"; exit 1; }
+          echo "server / ports / key / api-server verified"
           # ./flutter/pubspec.yaml
           #sed -i '/intl:/a \ \ archive: ^3.6.1' ./flutter/pubspec.yaml
+
+      # rdgen: keep API login, but never feed access_token into the connection path.
+      # Otherwise a logged-in client forces secure_tcp against hbbs, and a self-hosted
+      # hbbs never answers -> "Failed to secure tcp: deadline has elapsed" on connect.
+      - name: tokenless (fix "Failed to secure tcp: deadline has elapsed")
+        shell: bash
+        run: |
+          if [ -f ./.github/patches/tokenless.py ]; then
+            cp ./.github/patches/tokenless.py ./tokenless.py
+          else
+            curl -fsSL -o tokenless.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/tokenless.py
+          fi
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" tokenless.py
+          # Fail loudly: a client that still forces the handshake is unusable.
+          grep -q 'let token = String::new();' ./src/ui_session_interface.rs \
+            || { echo "::error::tokenless patch did not apply"; exit 1; }
 
       - name: allow custom.txt
         uses: nick-fields/retry@v3
@@ -313,11 +344,12 @@ jobs:
           retry_wait_seconds: 15
           shell: pwsh
           command: |
-            Invoke-WebRequest -Uri https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/allowCustom.py -OutFile allowCustom.py
+            if (Test-Path ./.github/patches/allowCustom.py) { Copy-Item ./.github/patches/allowCustom.py allowCustom.py -Force } else { Invoke-WebRequest -Uri https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/allowCustom.py -OutFile allowCustom.py }
             python allowCustom.py
             # Remove Setup Server Tip
-            Invoke-WebRequest -Uri https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff -OutFile removeSetupServerTip.diff
+            if (Test-Path ./.github/patches/removeSetupServerTip.diff) { Copy-Item ./.github/patches/removeSetupServerTip.diff removeSetupServerTip.diff -Force } else { Invoke-WebRequest -Uri https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff -OutFile removeSetupServerTip.diff }
             git apply removeSetupServerTip.diff
+            if ($LASTEXITCODE -ne 0) { Write-Host "::warning::removeSetupServerTip.diff did not apply cleanly - tip not removed" }
 
       - name: Patch remote printer port to spool file
         shell: python
@@ -504,22 +536,21 @@ jobs:
 
       - name: use X for offline display instead of orange circle
         if: env.xOffline == 'true'
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 5
-          max_attempts: 3
-          retry_wait_seconds: 15
-          shell: pwsh
-          continue_on_error: true
-          command: |
-            Invoke-WebRequest -Uri https://raw.githubusercontent.com/bryangerlach/rdgen/refs/heads/master/.github/patches/xoffline.diff -OutFile xoffline.diff
-            git apply xoffline.diff
-
-      - name: fix address book online status loss (Personal=1)
-        continue-on-error: true
         shell: bash
         run: |
-          curl -fsSL https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/ab_online_fix.py -o ab_online_fix.py
+          if [ -f ./.github/patches/xoffline.diff ]; then
+            cp ./.github/patches/xoffline.diff ./xoffline.diff
+          else
+            curl -fsSL -o xoffline.diff https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/xoffline.diff
+          fi
+          if ! patch -p1 --forward --no-backup-if-mismatch -r - < xoffline.diff; then
+            echo "::warning::xoffline.diff did not apply cleanly - X-offline icon skipped"
+          fi
+
+      - name: fix address book online status loss (Personal=1)
+        shell: bash
+        run: |
+          if [ -f ./.github/patches/ab_online_fix.py ]; then cp ./.github/patches/ab_online_fix.py ./ab_online_fix.py; else curl -fsSL -o ab_online_fix.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/ab_online_fix.py; fi
           python3 ab_online_fix.py
 
       - name: removeNewVersionNotif

@@ -92,10 +92,10 @@ index 877576461..4efd6c8b0 100644
  
      timerCallback() async {
        final connectionStatus =
-@@ -227,14 +225,14 @@ class ServerModel with ChangeNotifier {
-     final temporaryPasswordLength =
-         await bind.mainGetOption(key: "temporary-password-length");
+@@ -232,14 +232,14 @@
      final approveMode = await bind.mainGetOption(key: kOptionApproveMode);
+     final numericOneTimePassword =
+         await mainGetBoolOption(kOptionAllowNumericOneTimePassword);
 -    /*
 +
      var hideCm = option2bool(
