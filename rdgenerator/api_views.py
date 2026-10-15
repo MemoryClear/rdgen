@@ -125,6 +125,64 @@ def api_generate(request):
     except (json.JSONDecodeError, ValueError) as e:
         return JsonResponse({"success": False, "error": f"Invalid JSON: {str(e)}"}, status=400)
 
+    # Optional platform override: allows the caller to overwrite the
+    # "platform" key carried in the JSON body (e.g. when the saved config
+    # says "windows" but the build should run as "linux"/"android"). The
+    # override may be supplied as a query parameter or as an additional
+    # field in the request body.
+    PLATFORM_OVERRIDE_KEYS = (
+        'platform', 'set_platform', 'setPlatform', 'platform_override',
+        'override_platform', 'platformOverride', 'overridePlatform',
+        'platform_setting', 'platformSetting',
+    )
+    override_platform = None
+    for key in PLATFORM_OVERRIDE_KEYS:
+        value = request.GET.get(key)
+        if value is not None and value != '':
+            override_platform = value
+            break
+    # Also accept any query parameter whose value is a valid platform choice.
+    if override_platform is None:
+        for key, value in request.GET.items():
+            if isinstance(value, str) and value in PLATFORM_CHOICES:
+                override_platform = value
+                break
+    if override_platform is None and isinstance(data, dict):
+        for key in PLATFORM_OVERRIDE_KEYS:
+            if key in data and data.get(key) not in (None, ''):
+                if key != 'platform':
+                    override_platform = data.get(key)
+                    break
+    # Fall back to a generic scan: any body field (other than "platform")
+    # whose value is a valid platform choice also acts as an override.
+    if override_platform is None and isinstance(data, dict):
+        for key, value in data.items():
+            if key == 'platform':
+                continue
+            key_l = str(key).lower()
+            if not isinstance(value, str) or value not in PLATFORM_CHOICES:
+                continue
+            # Only treat a field as a platform override when its name suggests
+            # that intent, to avoid misreading ordinary fields (e.g. appname)
+            # whose value happens to be a platform name.
+            if ('platform' in key_l or 'override' in key_l or 'set' in key_l
+                    or key_l in ('os', 'target', 'targetos')):
+                override_platform = value
+                break
+
+    if override_platform is not None:
+        if override_platform not in PLATFORM_CHOICES:
+            return JsonResponse({
+                "success": False,
+                "error": "Validation errors",
+                "details": {"platform": f"Invalid choice. Must be one of: {PLATFORM_CHOICES}"}
+            }, status=400)
+        # Make validation + generation honour the override instead of (or
+        # in addition to) the platform already present in the JSON body.
+        if isinstance(data, dict):
+            data = dict(data)
+            data['platform'] = override_platform
+
     cleaned, errors = validate_generate_params(data)
     if errors:
         return JsonResponse({
@@ -180,16 +238,18 @@ def api_status(request):
     if platform:
         response_data['platform'] = platform
 
-    # When generation completed successfully, expose the filenames that were
-    # actually uploaded/saved for this run so API consumers can download them.
-    if result.get('status') == 'success' and _UUID_RE.match(uuid_val or ''):
-        created_files = []
+    # Expose the filenames that were actually uploaded/saved for this run so
+    # API consumers can download them. The directory is scanned regardless of
+    # the run status so that any (possibly partial) files are still reported,
+    # including on failure.
+    created_files = []
+    if _UUID_RE.match(uuid_val or ''):
         run_dir = os.path.join('exe', uuid_val)
         if os.path.isdir(run_dir):
             for name in sorted(os.listdir(run_dir)):
                 full_path = os.path.join(run_dir, name)
                 if os.path.isfile(full_path):
                     created_files.append(name)
-        response_data['files'] = created_files
+    response_data['files'] = created_files
 
     return JsonResponse(response_data)
