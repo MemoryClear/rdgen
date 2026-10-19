@@ -150,7 +150,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e 's|^version = ".*"|version = "${{ inputs.app_version }}"|' ./Cargo.toml
-          cargo generate-lockfile
+          sed -i '/name = "rustdesk"/ {n; s/version = ".*"/version = "${{ inputs.app_version }}"/}' ./Cargo.lock
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
@@ -895,7 +895,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e 's|^version = ".*"|version = "${{ inputs.app_version }}"|' ./Cargo.toml
-          cargo generate-lockfile
+          sed -i '/name = "rustdesk"/ {n; s/version = ".*"/version = "${{ inputs.app_version }}"/}' ./Cargo.lock
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
@@ -1477,7 +1477,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e 's|^version = ".*"|version = "${{ inputs.app_version }}"|' ./Cargo.toml
-          cargo generate-lockfile
+          sed -i '/name = "rustdesk"/ {n; s/version = ".*"/version = "${{ inputs.app_version }}"/}' ./Cargo.lock
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
@@ -1653,7 +1653,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e 's|^version = ".*"|version = "${{ inputs.app_version }}"|' ./Cargo.toml
-          cargo generate-lockfile
+          sed -i '/name = "rustdesk"/ {n; s/version = ".*"/version = "${{ inputs.app_version }}"/}' ./Cargo.lock
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
