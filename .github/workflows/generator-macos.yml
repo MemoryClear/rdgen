@@ -13,6 +13,11 @@ on:
         required: true
         default: ''
         type: string
+      app_version:
+        description: 'custom app version string (overrides build version)'
+        required: false
+        default: ''
+        type: string
 
 env:
   SCITER_RUST_VERSION: "1.75" # https://github.com/rustdesk/rustdesk/discussions/7503, also 1.78 has ABI change which causes our sciter version not working, https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
@@ -122,6 +127,14 @@ jobs:
         with:
             repository: rustdesk/rustdesk
             submodules: recursive
+
+      - name: Set custom app version
+        continue-on-error: true
+        if: ${{ inputs.app_version != '' }}
+        shell: bash
+        run: |
+          sed -i -e 's|^version = ".*"|version = "${{ inputs.app_version }}"|' ./Cargo.toml
+          grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
         continue-on-error: true
