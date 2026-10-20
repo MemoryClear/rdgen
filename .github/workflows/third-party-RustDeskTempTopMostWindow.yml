@@ -80,7 +80,22 @@ jobs:
           shell: pwsh
           command: |
             cd RustDeskTempTopMostWindow
-            git checkout ecd8d6a139eee76845ea66423fb739af450fda90
+            # 1.4.9 added the show/hide window messages this DLL must answer;
+            # older tags (still offered by this fork's dynamic version list) need
+            # the pre-v0.3 commit. Upstream pins the new SHA unconditionally, which
+            # quietly breaks builds of those older tags - numeric compare keeps
+            # 1.5+/2.x on the new pin without editing this file per release.
+            $pinNew = 'ecd8d6a139eee76845ea66423fb739af450fda90'
+            $pinOld = '53b548a5398624f7149a382000397993542ad796'
+            $ver = "${{ inputs.rustdesk-version }}"
+            # Default to the current pin (1.4.9+/master); only a recognised tag
+            # older than 1.4.9 falls back to the pre-v0.3 commit.
+            $sha = $pinNew
+            if ($ver -match '^v?(\d+)\.(\d+)\.(\d+)$' -and `
+                [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])" -lt [version]'1.4.9') {
+              $sha = $pinOld
+            }
+            git checkout $sha
             if ($LASTEXITCODE -ne 0) { throw "Failed to checkout privacy DLL source" }
             if ($env:privacylink_url-ne "false") {
               Invoke-WebRequest -Uri ${{ env.privacylink_url }}/get_png?filename=${{ env.privacylink_file }}"&"uuid=${{ env.privacylink_uuid }} -OutFile privacy.png

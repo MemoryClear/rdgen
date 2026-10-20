@@ -9,6 +9,15 @@ from .views import generate_custom_client, _get_run_status, _UUID_RE
 # Field validation constraints (mirrored from GenerateForm)
 PLATFORM_CHOICES = ['windows', 'windows-x86', 'linux', 'android', 'macos']
 VERSION_CHOICES = ['master', '1.5.0']
+# The web form's version list is fetched dynamically from GitHub Releases, so a
+# hardcoded list here would reject tags the form happily offers (and would need
+# editing on every release). Accept `master` plus any X.Y.Z release tag instead.
+VERSION_RE = re.compile(r'^v?\d+\.\d+\.\d+$')
+
+
+def is_valid_version(value):
+    """`master` or a released tag like 1.5.0 / 1.4.9."""
+    return isinstance(value, str) and (value == 'master' or bool(VERSION_RE.match(value)))
 DIRECTION_CHOICES = ['incoming', 'outgoing', 'both']
 INSTALLATION_CHOICES = ['installationY', 'installationN']
 SETTINGS_CHOICES = ['settingsY', 'settingsN']
@@ -71,6 +80,12 @@ def validate_generate_params(data):
     }
     for field, (choices, default) in choice_validations.items():
         value = data.get(field, default)
+        if field == 'version':
+            if not is_valid_version(value):
+                errors[field] = "Invalid choice. Must be 'master' or a release tag like 1.5.0"
+            else:
+                cleaned[field] = value
+            continue
         if value not in choices:
             errors[field] = f'Invalid choice. Must be one of: {choices}'
         else:
@@ -186,7 +201,7 @@ def api_generate(request):
             data['platform'] = override_platform
 
     # Optional version override, mirroring the optional platform override.
-    # Any value must be one of VERSION_CHOICES.
+    # Any value must be 'master' or a release tag (see is_valid_version).
     VERSION_OVERRIDE_KEYS = (
         'version', 'set_version', 'setVersion', 'version_override',
         'override_version', 'versionOverride', 'overrideVersion',
@@ -200,7 +215,7 @@ def api_generate(request):
             break
     if override_version is None:
         for key, value in request.GET.items():
-            if isinstance(value, str) and value in VERSION_CHOICES:
+            if is_valid_version(value):
                 override_version = value
                 break
     if override_version is None and isinstance(data, dict):
@@ -213,7 +228,7 @@ def api_generate(request):
         for key, value in data.items():
             if key == 'version':
                 continue
-            if not isinstance(value, str) or value not in VERSION_CHOICES:
+            if not is_valid_version(value):
                 continue
             key_l = str(key).lower()
             if not ('version' in key_l or 'ver' in key_l or 'set' in key_l
@@ -223,11 +238,11 @@ def api_generate(request):
             break
 
     if override_version is not None:
-        if override_version not in VERSION_CHOICES:
+        if not is_valid_version(override_version):
             return JsonResponse({
                 "success": False,
                 "error": "Validation errors",
-                "details": {"version": f"Invalid choice. Must be one of: {VERSION_CHOICES}"}
+                "details": {"version": "Invalid choice. Must be 'master' or a release tag like 1.5.0"}
             }, status=400)
         if isinstance(data, dict):
             data = dict(data)
