@@ -32,7 +32,7 @@ env:
   FLUTTER_RUST_BRIDGE_VERSION: "1.80.1"  # for arm64 linux because official Dart SDK does not work
   FLUTTER_ELINUX_VERSION: "3.16.9"
   TAG_NAME: "${{ inputs.upload-tag }}"
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  VCPKG_BINARY_SOURCES: "clear"
   # Fallback only. The real vcpkg commit is read at build time from the checked
   # out RustDesk vcpkg.json (vcpkg-configuration.default-registry.baseline), so
   # it always matches the version being built. See "Detect vcpkg baseline".
@@ -134,6 +134,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e 's|^version = ".*"|version = "${{ inputs.app_version }}"|' ./Cargo.toml
+          sed -i '/name = "rustdesk"/ {n; s/version = ".*"/version = "${{ inputs.app_version }}"/}' ./Cargo.lock
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
@@ -602,7 +603,15 @@ jobs:
           echo "sha=$baseline" >> "$GITHUB_OUTPUT"
           echo "RustDesk vcpkg baseline: $baseline"
 
-      - name: Setup vcpkg with Github Actions binary cache
+      - name: Restore vcpkg installed cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/installed
+          key: vcpkg-macos-${{ steps.vcpkg_baseline.outputs.sha }}-${{ matrix.job.vcpkg-triplet }}
+          restore-keys: |
+            vcpkg-macos-${{ steps.vcpkg_baseline.outputs.sha }}-
+
+      - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: ${{ steps.vcpkg_baseline.outputs.sha }}
@@ -623,6 +632,13 @@ jobs:
             exit 1
           fi
           head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
+
+      - name: Save vcpkg installed cache
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: ${{ github.workspace }}/installed
+          key: vcpkg-macos-${{ steps.vcpkg_baseline.outputs.sha }}-${{ matrix.job.vcpkg-triplet }}
 
       - name: Create MacOS directory structure
         run: |

@@ -32,7 +32,7 @@ env:
   # for arm64 linux because official Dart SDK does not work
   FLUTTER_ELINUX_VERSION: "3.16.9"
   TAG_NAME: "${{ inputs.upload-tag }}"
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  VCPKG_BINARY_SOURCES: "clear"
   # Fallback only. The real vcpkg commit is read at build time from the checked
   # out RustDesk vcpkg.json (vcpkg-configuration.default-registry.baseline), so
   # it always matches the version being built. See "Detect vcpkg baseline".
@@ -201,6 +201,7 @@ jobs:
         shell: bash
         run: |
           sed -i -e 's|^version = ".*"|version = "${{ inputs.app_version }}"|' ./Cargo.toml
+          sed -i '/name = "rustdesk"/ {n; s/version = ".*"/version = "${{ inputs.app_version }}"/}' ./Cargo.lock
           grep '^version = ' ./Cargo.toml
 
       - name: Apply allow_custom_update patch
@@ -270,7 +271,15 @@ jobs:
           echo "sha=$baseline" >> "$GITHUB_OUTPUT"
           echo "RustDesk vcpkg baseline: $baseline"
 
-      - name: Setup vcpkg with Github Actions binary cache
+      - name: Restore vcpkg installed cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/artifacts/vcpkg/installed
+          key: vcpkg-android-${{ steps.vcpkg_baseline.outputs.sha }}-${{ matrix.job.target }}
+          restore-keys: |
+            vcpkg-android-${{ steps.vcpkg_baseline.outputs.sha }}-
+
+      - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: /opt/artifacts/vcpkg
@@ -305,6 +314,13 @@ jobs:
           fi
         shell: bash
 
+      - name: Save vcpkg installed cache
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: /opt/artifacts/vcpkg/installed
+          key: vcpkg-android-${{ steps.vcpkg_baseline.outputs.sha }}-${{ matrix.job.target }}
+        
       - name: Restore bridge files
         uses: actions/download-artifact@master
         with:
@@ -429,13 +445,13 @@ jobs:
           sed -i -e 's|description = "RustDesk Remote Desktop"|description = "${{ env.appname }}"|' ./Cargo.toml
           sed -i -e 's|ProductName = "RustDesk"|ProductName = "${{ env.appname }}"|' ./Cargo.toml
           sed -i -e 's|FileDescription = "RustDesk Remote Desktop"|FileDescription = "${{ env.appname }}"|' ./Cargo.toml
-          sed -i -e 's|OriginalFilename = "rustdesk.exe"|OriginalFilename = "${{ env.appname }}.exe"|' ./Cargo.toml
+          sed -i -e 's|OriginalFilename = "rustdesk.exe"|OriginalFilename = "${{ env.slug_appname }}.exe"|' ./Cargo.toml
           sed -i 's|name = "RustDesk"|name = "${{ env.appname }}"|' ./Cargo.toml
           sed -i -e 's|description = "RustDesk Remote Desktop"|description = "${{ env.appname }}"|' ./libs/portable/Cargo.toml
           sed -i -e 's|ProductName = "RustDesk"|ProductName = "${{ env.appname }}"|' ./libs/portable/Cargo.toml
           sed -i -e 's|FileDescription = "RustDesk Remote Desktop"|FileDescription = "${{ env.appname }}"|' ./libs/portable/Cargo.toml
-          sed -i -e 's|OriginalFilename = "rustdesk.exe"|OriginalFilename = "${{ env.appname }}.exe"|' ./libs/portable/Cargo.toml
-          sed -i -e 's|const APP_PREFIX: \&str = "rustdesk";|const APP_PREFIX: \&str = "${{ env.appname }}";|' ./libs/portable/src/main.rs
+          sed -i -e 's|OriginalFilename = "rustdesk.exe"|OriginalFilename = "${{ env.slug_appname }}.exe"|' ./libs/portable/Cargo.toml
+          sed -i -e 's|const APP_PREFIX: \&str = "rustdesk";|const APP_PREFIX: \&str = "${{ env.slug_appname }}";|' ./libs/portable/src/main.rs
           find ./src/lang -name "*.rs" -exec sed -i -e 's|RustDesk|${{ env.appname }}|' {} \;
           sed -i -e 's|RustDesk|${{ env.appname }}|' ./flutter/android/app/src/main/res/values/strings.xml
           sed -i -e "s|title: 'RustDesk'|title: '${{ env.appname }}'|" ./flutter/lib/main.dart
