@@ -838,16 +838,12 @@ jobs:
     needs: [generate-bridge-linux, setup]
     name: build rustdesk linux drm x86_64
     runs-on: ubuntu-22.04
-    # Only rustdesk's master branch carries the drm/libdrmtap support this job
-    # drives: build.py at tag 1.4.9 has neither build_libdrmtap_so nor
-    # assert_staged_binary_is_drm, so a versioned build dies at
-    #   AttributeError: module 'b' has no attribute 'build_libdrmtap_so'
-    # One failed job marks the whole run failed, so a client that was in fact
-    # built got reported as a build failure. No other job consumes this one's
-    # artifacts (deploy needs only build-rustdesk-linux, build-flatpak and
-    # build-appimage). Gated the way bridge.yml already tells the two sources
-    # apart.
-    if: ${{ inputs.version == 'master' }}
+    # DRM/libdrmtap capture only exists in RustDesk's 1.5.0+ sources (build.py
+    # gained build_libdrmtap_so / assert_staged_binary_is_drm there). This fork
+    # still offers older tags in the dynamic version list, and one failed job
+    # marks the whole run failed, so skip those tags instead of failing the run.
+    # (Upstream rdgen removed <1.5.0 from its UI entirely.)
+    if: ${{ inputs.version == 'master' || !(startsWith(inputs.version, '0.') || startsWith(inputs.version, '1.0.') || startsWith(inputs.version, '1.1.') || startsWith(inputs.version, '1.2.') || startsWith(inputs.version, '1.3.') || startsWith(inputs.version, '1.4.')) }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
