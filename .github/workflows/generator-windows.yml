@@ -766,6 +766,15 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
           pushd ./res/msi
+          # preprocess.py runs ../../rustdesk/<app-name>.exe to read version and
+          # build date, and skips exactly that file when generating WiX components -
+          # but the build renamed the binary with its slug (spaces/special chars
+          # folded to '-'). Rename it to the pretty name so the probe and the MSI
+          # File element agree; copying would leave a stray slug.exe behind, which
+          # would then be packaged as an extra component.
+          if ("${{ env.appname }}" -ne "${{ env.slug_appname }}") {
+            Rename-Item "../../rustdesk/${{ env.slug_appname }}.exe" -NewName "${{ env.appname }}.exe" -Force
+          }
           python preprocess.py --app-name "${{ env.appname }}" --arp -d ../../rustdesk
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
