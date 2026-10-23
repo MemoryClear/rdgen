@@ -764,18 +764,24 @@ jobs:
       - name: Build msi
         continue-on-error: true
         if: env.UPLOAD_ARTIFACT == 'true'
+        env:
+          # WiX/ARP product name: keep the pretty app name, but fold spaces to the
+          # slug (MSI properties and launch paths are painful with spaces). This one
+          # value drives both the exe rename below and preprocess.py's --app-name.
+          MSI_APP_NAME: ${{ contains(env.appname, ' ') && env.slug_appname || env.appname }}
         run: |
           pushd ./res/msi
-          # preprocess.py runs ../../rustdesk/<app-name>.exe to read version and
+          # preprocess.py executes ../../rustdesk/<app-name>.exe to read version and
           # build date, and skips exactly that file when generating WiX components -
-          # but the build renamed the binary with its slug (spaces/special chars
-          # folded to '-'). Rename it to the pretty name so the probe and the MSI
-          # File element agree; copying would leave a stray slug.exe behind, which
-          # would then be packaged as an extra component.
-          if ("${{ env.appname }}" -ne "${{ env.slug_appname }}") {
-            Rename-Item "../../rustdesk/${{ env.slug_appname }}.exe" -NewName "${{ env.appname }}.exe" -Force
+          # but the build renamed the binary with its slug ('My App.exe' became
+          # 'my-app.exe'; a non-ASCII name can fold to nothing at all). Rename it to
+          # MSI_APP_NAME so the probe and the MSI File element agree; copying would
+          # leave a stray slug.exe that becomes an extra component.
+          # -ne is case-insensitive here, so pure case differences need no move.
+          if ("$env:MSI_APP_NAME" -ne "${{ env.slug_appname }}") {
+            Rename-Item "../../rustdesk/${{ env.slug_appname }}.exe" -NewName "$env:MSI_APP_NAME.exe" -Force
           }
-          python preprocess.py --app-name "${{ env.appname }}" --arp -d ../../rustdesk
+          python preprocess.py --app-name "$env:MSI_APP_NAME" --arp -d ../../rustdesk
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
           cp ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/rustdesk-latest.msi
