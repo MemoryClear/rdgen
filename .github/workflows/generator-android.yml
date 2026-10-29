@@ -558,12 +558,38 @@ jobs:
             || { echo "::error::tokenless patch did not apply"; exit 1; }
 
       - name: allow custom.txt
-        continue-on-error: true
-        shell: bash
-        run: |
-          sed -i -e '/const KEY:/,/};/d' ./src/common.rs
-          sed -i -e '/let Ok(data) = sign::verify(&data, &pk)/,/};/d' ./src/common.rs
-          # sed -i '/intl:/a \ \ archive: ^3.6.1' ./flutter/pubspec.yaml
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 15
+          shell: bash
+          command: |
+            # Upstream fetches both scripts over the network every run; use the
+            # copies vendored in this repo first (they are what the rest of the
+            # workflows use) and keep curl as the fallback.
+            if [ -f ./.github/patches/allowCustom.py ]; then
+              cp ./.github/patches/allowCustom.py ./allowCustom.py
+            else
+              curl -fsSL -o allowCustom.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/allowCustom.py
+            fi
+            python allowCustom.py
+            # allowCustom.py deletes the 9-line custom.txt signature block by line
+            # count and prints success even when its anchor is gone. Fail loudly.
+            if grep -q 'const KEY: &str' ./src/common.rs; then
+              echo "::error::allowCustom.py did not remove the custom.txt signature block"
+              exit 1
+            fi
+            if [ -f ./.github/patches/removeSetupServerTip.diff ]; then
+              cp ./.github/patches/removeSetupServerTip.diff ./removeSetupServerTip.diff
+            else
+              curl -fsSL -o removeSetupServerTip.diff https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff
+            fi
+            # Cosmetic patch: warn instead of failing the whole run.
+            if ! patch -p1 --forward --no-backup-if-mismatch -r - < removeSetupServerTip.diff; then
+              echo "::warning::removeSetupServerTip.diff did not apply cleanly - tip not removed"
+            fi
+            echo -n '${{ env.custom }}' > ./custom_.txt
 
       - name: Remove scam alert on Android
         shell: bash
