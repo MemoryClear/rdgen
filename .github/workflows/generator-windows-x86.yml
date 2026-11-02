@@ -471,12 +471,17 @@ jobs:
           grep -n "key.is_empty()" ./src/client.rs || true
 
       - name: removeNewVersionNotif
-        continue-on-error: true
         if: env.removeNewVersionNotif == 'true'
         shell: bash
         run: | 
           sed -i -e 's|{software_update_url ? <UpdateMe /> : ""}||' ./src/ui/index.tis
-          sed -i '/let (request, url) =/,/Ok(())/{/Ok(())/!d}' ./src/common.rs
+          if [ -f ./.github/patches/disable_update_check.py ]; then
+            cp ./.github/patches/disable_update_check.py ./disable_update_check.py
+          else
+            curl -fsSL -o disable_update_check.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/disable_update_check.py
+          fi
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" disable_update_check.py ./src/common.rs
 
       - name: Build rustdesk
         id: build

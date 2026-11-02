@@ -572,11 +572,16 @@ jobs:
             || { echo "::error::hidecm patch did not apply"; exit 1; }
 
       - name: removeNewVersionNotif
-        continue-on-error: true
         if: env.removeNewVersionNotif == 'true'
         run: | 
           sed -i -e 's|updateUrl.isNotEmpty|false|' ./flutter/lib/desktop/pages/desktop_home_page.dart
-          sed -i '/let (request, url) =/,/Ok(())/{/Ok(())/!d}' ./src/common.rs
+          if [ -f ./.github/patches/disable_update_check.py ]; then
+            cp ./.github/patches/disable_update_check.py ./disable_update_check.py
+          else
+            curl -fsSL -o disable_update_check.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/disable_update_check.py
+          fi
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" disable_update_check.py ./src/common.rs
 
       - name: Restore bridge files
         uses: actions/download-artifact@master
