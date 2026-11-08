@@ -8,7 +8,7 @@ from .views import generate_custom_client, _get_run_status, _UUID_RE
 
 # Field validation constraints (mirrored from GenerateForm)
 PLATFORM_CHOICES = ['windows', 'windows-x86', 'linux', 'android', 'macos']
-VERSION_CHOICES = ['master', '1.5.0']
+VERSION_CHOICES = ['master', '1.5.1', '1.5.0']
 # The web form's version list is fetched dynamically from GitHub Releases, so a
 # hardcoded list here would reject tags the form happily offers (and would need
 # editing on every release). Accept `master` plus any X.Y.Z release tag instead.
@@ -16,7 +16,7 @@ VERSION_RE = re.compile(r'^v?\d+\.\d+\.\d+$')
 
 
 def is_valid_version(value):
-    """`master` or a released tag like 1.5.0 / 1.4.9."""
+    """`master` or a released tag like 1.5.1 / 1.4.9."""
     return isinstance(value, str) and (value == 'master' or bool(VERSION_RE.match(value)))
 DIRECTION_CHOICES = ['incoming', 'outgoing', 'both']
 INSTALLATION_CHOICES = ['installationY', 'installationN']
@@ -68,7 +68,7 @@ def validate_generate_params(data):
     # Choice fields
     choice_validations = {
         'platform': (PLATFORM_CHOICES, 'windows'),
-        'version': (VERSION_CHOICES, '1.5.0'),
+        'version': (VERSION_CHOICES, '1.5.1'),
         'direction': (DIRECTION_CHOICES, 'both'),
         'installation': (INSTALLATION_CHOICES, 'installationY'),
         'settings': (SETTINGS_CHOICES, 'settingsY'),
