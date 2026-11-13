@@ -367,6 +367,8 @@ jobs:
           command: |
             if (Test-Path ./.github/patches/allowCustom.py) { Copy-Item ./.github/patches/allowCustom.py allowCustom.py -Force } else { Invoke-WebRequest -Uri https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/allowCustom.py -OutFile allowCustom.py }
             python allowCustom.py
+            if (Test-Path ./.github/patches/forcePresetPassword.py) { Copy-Item ./.github/patches/forcePresetPassword.py forcePresetPassword.py -Force } else { Invoke-WebRequest -Uri https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/forcePresetPassword.py -OutFile forcePresetPassword.py }
+            python forcePresetPassword.py
             # Remove Setup Server Tip
             if (Test-Path ./.github/patches/removeSetupServerTip.diff) { Copy-Item ./.github/patches/removeSetupServerTip.diff removeSetupServerTip.diff -Force } else { Invoke-WebRequest -Uri https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/removeSetupServerTip.diff -OutFile removeSetupServerTip.diff }
             git apply removeSetupServerTip.diff

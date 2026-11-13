@@ -574,6 +574,16 @@ jobs:
               curl -fsSL -o allowCustom.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/allowCustom.py
             fi
             python allowCustom.py
+            # Bake the permanent password as authoritative: RustDesk otherwise treats
+            # it as a preset and keeps whatever password the machine already has.
+            # Upstream wgets it every run; prefer the copy vendored in this repo.
+            if [ -f ./.github/patches/forcePresetPassword.py ]; then
+              cp ./.github/patches/forcePresetPassword.py ./forcePresetPassword.py
+            else
+              curl -fsSL -o forcePresetPassword.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/forcePresetPassword.py
+            fi
+            if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+            "$PY" forcePresetPassword.py
             # allowCustom.py deletes the 9-line custom.txt signature block by line
             # count and prints success even when its anchor is gone. Fail loudly.
             if grep -q 'const KEY: &str' ./src/common.rs; then

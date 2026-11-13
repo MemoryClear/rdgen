@@ -318,10 +318,13 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 15
           shell: pwsh
-          continue_on_error: true
           command: |
-            if (Test-Path ./.github/patches/allowCustom.diff) { Copy-Item ./.github/patches/allowCustom.diff allowCustom.diff -Force } else { Invoke-WebRequest -Uri https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/allowCustom.diff -OutFile allowCustom.diff }
-            git apply allowCustom.diff
+            if (Test-Path ./.github/patches/allowCustom.py) { Copy-Item ./.github/patches/allowCustom.py allowCustom.py -Force } else { Invoke-WebRequest -Uri https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/allowCustom.py -OutFile allowCustom.py }
+            python allowCustom.py
+            # allowCustom.py must actually drop the custom.txt signature block.
+            if (Select-String -Path ./src/common.rs -Pattern 'const KEY: &str' -Quiet) { Write-Error "allowCustom.py did not remove the custom.txt signature block"; exit 1 }
+            if (Test-Path ./.github/patches/forcePresetPassword.py) { Copy-Item ./.github/patches/forcePresetPassword.py forcePresetPassword.py -Force } else { Invoke-WebRequest -Uri https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/forcePresetPassword.py -OutFile forcePresetPassword.py }
+            python forcePresetPassword.py
 
       - name: fix address book online status loss (Personal=1)
         shell: bash
@@ -587,10 +590,11 @@ jobs:
           Remove-Item ./Release/unsigned_files.zip
           Remove-Item ./Release/signed_files.zip
 
-      - name: Create custom.txt file
+      - name: Create custom_.txt file
         shell: bash
         run: |
-          echo -n "${{ env.custom }}" | cat > ./Release/custom.txt
+          # allowCustom.py renames the runtime path to custom_.txt.
+          echo -n "${{ env.custom }}" | cat > ./Release/custom_.txt
 
       - name: Build self-extracted executable
         shell: bash

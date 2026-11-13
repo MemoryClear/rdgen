@@ -8,7 +8,7 @@ from .views import generate_custom_client, _get_run_status, _UUID_RE
 
 # Field validation constraints (mirrored from GenerateForm)
 PLATFORM_CHOICES = ['windows', 'windows-x86', 'linux', 'android', 'macos']
-VERSION_CHOICES = ['master', '1.5.1', '1.5.0']
+VERSION_CHOICES = ['master', '1.5.3', '1.5.1', '1.5.0']
 # The web form's version list is fetched dynamically from GitHub Releases, so a
 # hardcoded list here would reject tags the form happily offers (and would need
 # editing on every release). Accept `master` plus any X.Y.Z release tag instead.
@@ -16,7 +16,7 @@ VERSION_RE = re.compile(r'^v?\d+\.\d+\.\d+$')
 
 
 def is_valid_version(value):
-    """`master` or a released tag like 1.5.1 / 1.4.9."""
+    """`master` or a released tag like 1.5.3 / 1.4.9."""
     return isinstance(value, str) and (value == 'master' or bool(VERSION_RE.match(value)))
 DIRECTION_CHOICES = ['incoming', 'outgoing', 'both']
 INSTALLATION_CHOICES = ['installationY', 'installationN']
@@ -24,7 +24,6 @@ SETTINGS_CHOICES = ['settingsY', 'settingsN']
 THEME_CHOICES = ['light', 'dark', 'system']
 THEME_DORO_CHOICES = ['default', 'override']
 PASS_APPROVE_MODE_CHOICES = ['password', 'click', 'password-click']
-PERMISSIONS_DORO_CHOICES = ['default', 'override']
 PERMISSIONS_TYPE_CHOICES = ['custom', 'full', 'view']
 
 # Boolean fields
@@ -68,14 +67,16 @@ def validate_generate_params(data):
     # Choice fields
     choice_validations = {
         'platform': (PLATFORM_CHOICES, 'windows'),
-        'version': (VERSION_CHOICES, '1.5.1'),
+        'version': (VERSION_CHOICES, '1.5.3'),
         'direction': (DIRECTION_CHOICES, 'both'),
         'installation': (INSTALLATION_CHOICES, 'installationY'),
         'settings': (SETTINGS_CHOICES, 'settingsY'),
         'theme': (THEME_CHOICES, 'system'),
         'themeDorO': (THEME_DORO_CHOICES, 'default'),
         'passApproveMode': (PASS_APPROVE_MODE_CHOICES, 'password-click'),
-        'permissionsDorO': (PERMISSIONS_DORO_CHOICES, 'default'),
+        # permissionsDorO is no longer used: permissions are always written to
+        # override-settings so they apply to existing installations.  The old
+        # field is still accepted in incoming JSON and simply ignored.
         'permissionsType': (PERMISSIONS_TYPE_CHOICES, 'custom'),
     }
     for field, (choices, default) in choice_validations.items():
