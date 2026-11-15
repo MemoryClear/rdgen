@@ -80,7 +80,7 @@ jobs:
           # - { target: aarch64-pc-windows-msvc, os: windows-2022 }
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         
       - uses: actions/download-artifact@v4
         with:
@@ -120,7 +120,7 @@ jobs:
 
       - name: Checkout source code
         if: ${{ env.VERSION != 'master' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: rustdesk/rustdesk
           ref: refs/tags/${{ env.VERSION }}
@@ -128,7 +128,7 @@ jobs:
 
       - name: Checkout source code
         if: ${{ env.VERSION == 'master' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: rustdesk/rustdesk
           submodules: recursive
@@ -367,7 +367,7 @@ jobs:
           echo "RustDesk vcpkg baseline: $baseline"
 
       - name: Restore vcpkg installed cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: C:\vcpkg\installed
           key: vcpkg-windows-${{ steps.vcpkg_baseline.outputs.sha }}-${{ matrix.job.vcpkg-triplet }}
@@ -411,7 +411,7 @@ jobs:
         shell: bash
 
       - name: Save vcpkg installed cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         continue-on-error: true
         with:
           path: C:\vcpkg\installed
@@ -467,9 +467,11 @@ jobs:
         if: ${{ env.delayFix == 'true' }}
         shell: bash
         run: |
-          # Precise fix: only extend the direct-connection condition with the
-          # key check, instead of globally replacing !key.is_empty() with
-          # false (which would also disable TCP encryption and UDP logic).
+          # Shorter connect timeout when a rendezvous key is configured (DVForge's
+          # delay fix). Deliberately NOT `!key.is_empty()` -> `false`: that also
+          # disables the secure_tcp handshake, i.e. encryption towards the ID
+          # server. This fork already skips that handshake safely through the
+          # tokenless patch (access_token never reaches the connection path).
           sed -i -e 's#if is_local || peer_nat_type == NatType::SYMMETRIC {#if is_local || peer_nat_type == NatType::SYMMETRIC || !key.is_empty() {#' ./src/client.rs
           grep -n "key.is_empty()" ./src/client.rs || true
 

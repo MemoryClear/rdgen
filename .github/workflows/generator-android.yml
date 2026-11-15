@@ -89,7 +89,7 @@ jobs:
             }
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         
       - uses: actions/download-artifact@v4
         with:
@@ -182,7 +182,7 @@ jobs:
 
       - name: Checkout source code
         if: ${{ env.VERSION != 'master' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: rustdesk/rustdesk
           ref: refs/tags/${{ env.VERSION }}
@@ -190,7 +190,7 @@ jobs:
        
       - name: Checkout source code
         if: ${{ env.VERSION == 'master' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: rustdesk/rustdesk
           submodules: recursive
@@ -272,7 +272,7 @@ jobs:
           echo "RustDesk vcpkg baseline: $baseline"
 
       - name: Restore vcpkg installed cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /opt/artifacts/vcpkg/installed
           key: vcpkg-android-${{ steps.vcpkg_baseline.outputs.sha }}-${{ matrix.job.target }}
@@ -315,7 +315,7 @@ jobs:
         shell: bash
 
       - name: Save vcpkg installed cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         continue-on-error: true
         with:
           path: /opt/artifacts/vcpkg/installed
@@ -525,11 +525,42 @@ jobs:
             || { echo "::error::custom config was not embedded into native_model.dart"; exit 1; }
 
       - name: change app id to custom
-        if: env.androidappid != 'com.carriez.flutter_hbb'
-        continue-on-error: true
-        shell: bash
+        if: env.androidappid != '' && env.androidappid != 'com.carriez.flutter_hbb'
+        shell: python
         run: |
-          sed -i -e 's|com.carriez.flutter_hbb|${{ env.androidappid }}|' ./flutter/android/app/build.gradle
+          import os
+          import re
+          import sys
+
+          path = "flutter/android/app/build.gradle"
+          app_id = os.environ.get("androidappid", "").strip()
+
+          # Android application IDs: at least two segments, each starting with
+          # a letter. This is also what keeps the value safe to write to Gradle.
+          if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+", app_id):
+              print(f"::error::invalid Android app id: {app_id!r}")
+              sys.exit(1)
+
+          with open(path, encoding="utf-8") as f:
+              text = f.read()
+
+          # Change ONLY applicationId (the installed identity). The namespace
+          # must stay com.carriez.flutter_hbb: that is where the Kotlin sources
+          # (and their unqualified R references) live, so retargeting it breaks
+          # the build with "Unresolved reference: R".
+          pattern = r'(?m)^(\s*applicationId\s+)["\x27]com\.carriez\.flutter_hbb["\x27]'
+          text, count = re.subn(pattern, lambda m: m.group(1) + f'"{app_id}"', text)
+          if count != 1:
+              print(f"::error::expected one applicationId line in {path}, replaced {count}")
+              sys.exit(1)
+
+          if not re.search(r'(?m)^\s*namespace\s+"com\.carriez\.flutter_hbb"', text):
+              print(f"::error::namespace in {path} is not com.carriez.flutter_hbb")
+              sys.exit(1)
+
+          with open(path, "w", encoding="utf-8", newline="") as f:
+              f.write(text)
+          print(f"applicationId -> {app_id} (namespace kept as com.carriez.flutter_hbb)")
 
       - name: change download link to custom
         if: env.downloadLink != 'https://rustdesk.com/download'
@@ -601,6 +632,17 @@ jobs:
             fi
             echo -n '${{ env.custom }}' > ./custom_.txt
 
+      - name: apply theme colors
+        shell: bash
+        run: |
+          if [ -f ./.github/patches/themeColors.py ]; then
+            cp ./.github/patches/themeColors.py ./themeColors.py
+          else
+            curl -fsSL -o themeColors.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/themeColors.py
+          fi
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" themeColors.py
+
       - name: Remove scam alert on Android
         shell: bash
         run: |
@@ -611,22 +653,30 @@ jobs:
         if: ${{ env.delayFix == 'true' }}
         shell: bash
         run: |
-          # Precise fix: only extend the direct-connection condition with the
-          # key check, instead of globally replacing !key.is_empty() with
-          # false (which would also disable TCP encryption and UDP logic).
+          # Shorter connect timeout when a rendezvous key is configured (DVForge's
+          # delay fix). Deliberately NOT `!key.is_empty()` -> `false`: that also
+          # disables the secure_tcp handshake, i.e. encryption towards the ID
+          # server. This fork already skips that handshake safely through the
+          # tokenless patch (access_token never reaches the connection path).
           sed -i -e 's#if is_local || peer_nat_type == NatType::SYMMETRIC {#if is_local || peer_nat_type == NatType::SYMMETRIC || !key.is_empty() {#' ./src/client.rs
           grep -n "key.is_empty()" ./src/client.rs || true
 
       - name: use X for offline display instead of orange circle
         if: env.xOffline == 'true'
-        shell: bash
-        run: |
-          if [ -f ./.github/patches/xoffline.diff ]; then
-            cp ./.github/patches/xoffline.diff ./xoffline.diff
-          else
-            curl -fsSL -o xoffline.diff https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/xoffline.diff
-          fi
-          patch -p1 --forward --no-backup-if-mismatch -r - < xoffline.diff
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 15
+          shell: bash
+          command: |
+            if [ -f ./.github/patches/xoffline.py ]; then
+              cp ./.github/patches/xoffline.py ./xoffline.py
+            else
+              curl -fsSL -o xoffline.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/xoffline.py
+            fi
+            if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+            "$PY" xoffline.py
 
       - name: fix address book online status loss (Personal=1)
         shell: bash
@@ -840,7 +890,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         
       - uses: actions/download-artifact@v4
         with:

@@ -90,7 +90,7 @@ jobs:
           # - { target: aarch64-pc-windows-msvc, os: windows-2022, arch: aarch64 }
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         
       - uses: actions/download-artifact@v4
         with:
@@ -130,7 +130,7 @@ jobs:
 
       - name: Checkout source code
         if: ${{ env.VERSION != 'master' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: rustdesk/rustdesk
           ref: refs/tags/${{ env.VERSION }}
@@ -138,7 +138,7 @@ jobs:
 
       - name: Checkout source code
         if: ${{ env.VERSION == 'master' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: rustdesk/rustdesk
           submodules: recursive
@@ -170,12 +170,12 @@ jobs:
           path: ./
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
       - name: Setup NuGet
-        uses: NuGet/setup-nuget@v2
+        uses: NuGet/setup-nuget@v4
         with:
           nuget-version: 'latest'
       
@@ -202,10 +202,9 @@ jobs:
           sed -i -e 's|"rustdesk.exe"|"${{ env.filename }}"|' ./flutter/windows/runner/Runner.rc
           sed -i -e 's|"RustDesk"|"${{ env.appname }}"|' ./flutter/windows/runner/Runner.rc
           # ./src/lang/en.rs
-          # change powered by rustdek to powered by compname
-          if [ ! -z "${{ env.compname }}" ]; then
-            find ./src/lang -name "*.rs" -exec sed -i '/powered_by_me/s|RustDesk|${{ env.compname }}|g' {} \;
-          fi
+          # The in-app "Powered by" link is removed at runtime through
+          # hide-powered-by-me=Y in custom_.txt (see generate_custom_client),
+          # so the powered_by_me translations are left alone.
           find ./src/lang -name "*.rs" -exec sed -i -e 's|RustDesk|${{ env.appname }}|' {} \;
           sed -i -e 's|RustDesk|${{ env.appname }}|' ./res/msi/Package/License.rtf
 
@@ -374,6 +373,12 @@ jobs:
             git apply removeSetupServerTip.diff
             if ($LASTEXITCODE -ne 0) { Write-Host "::warning::removeSetupServerTip.diff did not apply cleanly - tip not removed" }
 
+      - name: apply theme colors
+        shell: pwsh
+        run: |
+          if (Test-Path ./.github/patches/themeColors.py) { Copy-Item ./.github/patches/themeColors.py themeColors.py -Force } else { Invoke-WebRequest -Uri https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/themeColors.py -OutFile themeColors.py }
+          python themeColors.py
+
       - name: Patch remote printer port to spool file
         shell: python
         run: |
@@ -467,24 +472,30 @@ jobs:
         if: ${{ env.delayFix == 'true' }}
         shell: bash
         run: |
-          # Precise fix: only extend the direct-connection condition with the
-          # key check, instead of globally replacing !key.is_empty() with
-          # false (which would also disable TCP encryption and UDP logic).
+          # Shorter connect timeout when a rendezvous key is configured (DVForge's
+          # delay fix). Deliberately NOT `!key.is_empty()` -> `false`: that also
+          # disables the secure_tcp handshake, i.e. encryption towards the ID
+          # server. This fork already skips that handshake safely through the
+          # tokenless patch (access_token never reaches the connection path).
           sed -i -e 's#if is_local || peer_nat_type == NatType::SYMMETRIC {#if is_local || peer_nat_type == NatType::SYMMETRIC || !key.is_empty() {#' ./src/client.rs
           grep -n "key.is_empty()" ./src/client.rs || true
 
       - name: use X for offline display instead of orange circle
         if: env.xOffline == 'true'
-        shell: bash
-        run: |
-          if [ -f ./.github/patches/xoffline.diff ]; then
-            cp ./.github/patches/xoffline.diff ./xoffline.diff
-          else
-            curl -fsSL -o xoffline.diff https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/xoffline.diff
-          fi
-          if ! patch -p1 --forward --no-backup-if-mismatch -r - < xoffline.diff; then
-            echo "::warning::xoffline.diff did not apply cleanly - X-offline icon skipped"
-          fi
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 15
+          shell: bash
+          command: |
+            if [ -f ./.github/patches/xoffline.py ]; then
+              cp ./.github/patches/xoffline.py ./xoffline.py
+            else
+              curl -fsSL -o xoffline.py https://raw.githubusercontent.com/MemoryClear/rdgen/refs/heads/master/.github/patches/xoffline.py
+            fi
+            if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+            "$PY" xoffline.py
 
       - name: removeNewVersionNotif
         if: env.removeNewVersionNotif == 'true'
@@ -510,7 +521,7 @@ jobs:
           cd ..
 
       - name: Checkout printer-adapter crate
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: bryangerlach/rdgen
           ref: master
@@ -654,16 +665,29 @@ jobs:
           mv ./target/release/rustdesk-portable-packer.exe "./SignOutput/rustdesk.exe"
 
       - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
 
       - name: Build msi
         continue-on-error: true
         if: env.UPLOAD_ARTIFACT == 'true'
+        env:
+          APP_VERSION: ${{ inputs.app_version }}
         run: |
+          # MSI ProductVersion must be numeric, so strip build metadata such as
+          # "+078" here. The client/updater keeps the full version; the MSI uses
+          # the numeric base and preprocess.py adds its own revision.
+          $msiVersion = ''
+          if ($env:APP_VERSION -match '^(\d+)\.(\d+)\.(\d+)') {
+            $msiVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
+          }
           $myappname = "${{ env.appname }}" -replace '\s','_'
           cp "rustdesk/${{ env.appname }}.exe" "rustdesk/${myappname}.exe" -ErrorAction SilentlyContinue
           pushd ./res/msi
-          python preprocess.py --app-name "$myappname" --arp -d ../../rustdesk
+          if ($msiVersion) {
+            python preprocess.py --app-name "$myappname" --arp -d ../../rustdesk --version "$msiVersion"
+          } else {
+            python preprocess.py --app-name "$myappname" --arp -d ../../rustdesk
+          }
           nuget restore msi.sln
           msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
           cp ./Package/bin/x64/Release/en-us/Package.msi ../../SignOutput/rustdesk-latest.msi
